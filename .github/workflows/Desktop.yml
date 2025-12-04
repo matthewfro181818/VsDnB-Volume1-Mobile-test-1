@@ -58,25 +58,21 @@ jobs:
       # ------------------------------------------
       - name: Install Haxelib Dependencies
         run: |
+
           haxelib install hxcpp
           haxelib install thx.core
           haxelib install thx.semver
           haxelib install lime
           haxelib install openfl
-          # Base flixel stack
           haxelib install flixel
           haxelib install flixel-ui
           haxelib install flixel-addons
-          haxelib install flxanimate
+          haxelib git flxanimate https://github.com/Dot-Stuff/flxanimate.git
           haxelib install json2object
-          haxelib install hxvlc
-          # Git dependencies
           haxelib git polymod https://github.com/PabloelproxD210/Polymod.git
           haxelib git hscript https://github.com/T5mpler/hscript-dnb
           haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
-          # HMM Dependency Manager
-          haxelib install hmm
-          haxelib run hmm install
+
       # -----------------------------------------------------
       # WINDOWS / LINUX / MACOS BUILDS
       # -----------------------------------------------------
