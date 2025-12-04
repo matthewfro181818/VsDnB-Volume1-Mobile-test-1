@@ -3,10 +3,6 @@ name: Mobile-iOS
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
 
 jobs:
@@ -18,9 +14,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # -----------------------------------------------------
+      # Determine version number (tag or dev-YYYYMMDD-HHMM)
+      # -----------------------------------------------------
       - name: Determine Version
         id: ver
-        shell: bash
         run: |
           if git describe --tags --exact-match >/dev/null 2>&1; then
             echo "version=$(git describe --tags --exact-match)" >> $GITHUB_OUTPUT
@@ -28,13 +26,21 @@ jobs:
             echo "version=dev-$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
           fi
 
+      # -----------------------------------------------------
+      # Install Haxe 4.3.6
+      # -----------------------------------------------------
       - uses: krdlab/setup-haxe@master
         with:
           haxe-version: 4.3.6
 
-      - name: Install Haxelibs
+      # -----------------------------------------------------
+      # Install Required Haxelibs
+      # -----------------------------------------------------
+      - name: Install Haxelib Dependencies
         run: |
           haxelib install hxcpp
+          haxelib install thx.core
+          haxelib install thx.semver
           haxelib install lime
           haxelib install openfl
           haxelib install flixel
@@ -42,29 +48,71 @@ jobs:
           haxelib install flixel-addons
           haxelib install flxanimate
           haxelib install json2object
-          haxelib install polymod
-          haxelib install hscript
-          haxelib install hxvlc
+          haxelib git polymod https://github.com/PabloelproxD210/Polymod.git
+          haxelib git hscript https://github.com/T5mpler/hscript-dnb
           haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
-          haxelib install hmm
-          haxelib run hmm install
 
-      - name: Build iOS (nosign)
-        run: haxelib run lime build ios -nosign -D officialBuild -DMOBILE_BUILD
+      # -----------------------------------------------------
+      # PREBUILD to generate ObjC++ before patching thx.Nil
+      # -----------------------------------------------------
+      - name: Generate iOS C++ (Prebuild + ObjC++)
+        run: |
+          haxelib run lime build ios -nosign -DofficialBuild -DMOBILE_BUILD -D HXCPP_CPP11 || true
 
+      # -----------------------------------------------------
+      # PATCH thx.Nil → ThxNil (fixes Objective-C++ conflict)
+      # -----------------------------------------------------
+      - name: Patch thx.Nil automatically
+        shell: bash
+        run: |
+          echo "=== Running UNIVERSAL thx.Nil PATCHER ==="
+
+          ROOTS=(
+            "./export/ios/obj"
+            "./bin/ios/VsDave/haxe/build"
+            "./bin/ios/VsDave/haxe/build/Release-iphoneos-64"
+          )
+
+          patched=0
+
+          for root in "${ROOTS[@]}"; do
+            if [ ! -d "$root" ]; then
+              continue
+            fi
+
+            echo "Scanning $root"
+
+            while IFS= read -r -d '' file; do
+              perl -pi -e 's/\bNil\b/ThxNil/g; s/thx::Nil/thx::ThxNil/g' "$file" && patched=$((patched+1))
+            done < <(find "$root" -type f \( -name "*.h" -o -name "*.hpp" -o -name "*.cpp" -o -name "*.mm" \) -print0)
+          done
+
+          echo "Patched ${patched} Objective-C++ files."
+          echo "=== Patch Completed ==="
+
+      # -----------------------------------------------------
+      # FINAL iOS BUILD (REAL BUILD)
+      # -----------------------------------------------------
+      - name: Build iOS (Final)
+        run: |
+          haxelib run lime build ios -nosign -DofficialBuild -DMOBILE_BUILD -D HXCPP_CPP11
+
+      # -----------------------------------------------------
+      # Package to IPA
+      # -----------------------------------------------------
       - name: Package IPA
         run: |
           cd export/release/ios/build/*-iphoneos
           mkdir Payload
           mv *.app Payload/
-          zip -r ~/ios-${{ steps.ver.outputs.version }}.ipa Payload
+          cd Payload
+          zip -r ios-${{ steps.ver.outputs.version }}.ipa Payload
+          mv ios-${{ steps.ver.outputs.version }}.ipa $HOME/
 
-      - name: Collect IPA
-        run: |
-          mkdir build
-          mv ~/ios-${{ steps.ver.outputs.version }}.ipa build/
-
+      # -----------------------------------------------------
+      # Upload IPA
+      # -----------------------------------------------------
       - uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
-          path: build/*
+          path: ~/ios-*.ipa
