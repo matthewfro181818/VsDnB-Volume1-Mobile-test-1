@@ -3,10 +3,6 @@ name: Mobile-Android
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
 
 jobs:
@@ -15,8 +11,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Determine Version
         id: ver
@@ -27,7 +21,8 @@ jobs:
             echo "version=dev-$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
           fi
 
-      - uses: krdlab/setup-haxe@master
+      - name: Install Haxe
+        uses: krdlab/setup-haxe@master
         with:
           haxe-version: 4.3.6
 
@@ -38,9 +33,11 @@ jobs:
           ndk: 25.1.8937393
           cmake: 3.22.1
 
-      - name: Install Haxelibs
+      - name: Install Haxelib Dependencies
         run: |
           haxelib install hxcpp
+          haxelib install thx.core
+          haxelib install thx.semver
           haxelib install lime
           haxelib install openfl
           haxelib install flixel
@@ -48,12 +45,9 @@ jobs:
           haxelib install flixel-addons
           haxelib install flxanimate
           haxelib install json2object
-          haxelib install polymod
-          haxelib install hscript
-          haxelib install hxvlc
+          haxelib git polymod https://github.com/PabloelproxD210/Polymod.git
+          haxelib git hscript https://github.com/T5mpler/hscript-dnb
           haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
-          haxelib install hmm
-          haxelib run hmm install
 
       - name: Configure Android
         run: |
@@ -62,16 +56,21 @@ jobs:
           haxelib run lime config JAVA_HOME $JAVA_HOME_17_X64
           haxelib run lime config ANDROID_SETUP true
 
-      - name: Build APK
-        run: haxelib run lime build android -D officialBuild -ONLY_ARMV7
-
-      - name: Collect APK
+      - name: Patch hxcpp flags
         run: |
-          mkdir build
-          cp export/release/android/bin/app/build/outputs/apk/release/*.apk \
-             build/android-${{ steps.ver.outputs.version }}.apk
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <xml>
+            <section id="vars">
+              <set name="HXCPP_CPP11" value="1"/>
+            </section>
+          </xml>' > ~/.hxcpp_config.xml
 
-      - uses: actions/upload-artifact@v4
+      - name: Build APK
+        run: |
+          haxelib run lime build android -D officialBuild -DONLY_ARMV7
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: build/*
+          path: export/release/android/bin/app/build/outputs/apk/release/*.apk
