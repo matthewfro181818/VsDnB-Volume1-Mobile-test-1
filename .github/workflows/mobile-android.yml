@@ -43,7 +43,7 @@ jobs:
           haxelib install flixel
           haxelib install flixel-ui
           haxelib install flixel-addons
-          haxelib install flxanimate
+          haxelib git flxanimate https://github.com/Dot-Stuff/flxanimate.git
           haxelib install json2object
           haxelib git polymod https://github.com/PabloelproxD210/Polymod.git
           haxelib git hscript https://github.com/T5mpler/hscript-dnb
